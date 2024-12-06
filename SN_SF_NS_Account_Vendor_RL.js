@@ -3,15 +3,9 @@
  *@NScriptType Restlet
  *@Description This Script is used to create Vendor from Salesforce to NetSuite.
  */
-/*
- Script Modification Log:
- -- Date --         -- Modified By --           --Requested By--      --Ticket Number             -- Description --
 
- */
-
-define(["N/record"], function (record) {
-    //This payload is for Project Create
-    var vendor_create_payload = {
+define(["N/record", "N/log"], function (record, log) {
+    const vendorCreatePayload = {
         "Name": "XYZ pvt ltd",
         "Id": "cvbns45wb",
         "MBDSFA_Payment_Category__c": "Monthly Publishers",
@@ -23,9 +17,9 @@ define(["N/record"], function (record) {
         "ShippingState": "New York",
         "ShippingPostalCode": "10000",
         "Phone": "23684912"
-    }
-    //This payload is for vendor Update
-    var vendor_update_payload = {
+    };
+
+    const vendorUpdatePayload = {
         "NetSuite_id": "",
         "Name": "XYZ pvt ltd",
         "Id": "cvbns45wb",
@@ -38,9 +32,9 @@ define(["N/record"], function (record) {
         "ShippingState": "New York",
         "ShippingPostalCode": "10000",
         "Phone": "23684912"
-    }
-    //Account to vendor SF-NS mapping
-    var account_vendor__mapping = {
+    };
+
+    const accountVendorMapping = {
         "NetSuite_id": "",
         "Name": "companyname",
         "Id": "custentity_salesforce_id",
@@ -53,197 +47,167 @@ define(["N/record"], function (record) {
         "ShippingState": "state",
         "ShippingPostalCode": "zip",
         "Phone": "addrphone"
-    }
+    };
 
-    //Manadatory fields
-    var manadatoryFields = {
-        'companyname': '',
-    }
+    const mandatoryFields = ["companyname", "category", "email"];
 
-    var httpMethodValidationObj = {
+    const httpMethodValidationObj = {
         "success": "false",
         "error": {
             "message": 'METHOD_NOT_ALLOWED',
             "code": 405,
         }
     };
-    var httpMethodValidationPayload = {
+
+    const httpBadRequestObj = {
         "success": "false",
         "error": {
             "message": 'BAD_REQUEST',
             "code": 400,
         }
     };
+
     function _post(context) {
         try {
-            log.debug({ title: 'context', details: context })
-            if (validatePayload(context) == true) {
-                return httpMethodValidationPayload;
-            }
-            else {
-                if ("NetSuite_id" in context) {//Vendor update case
-                    try {
-                        var updateVendorObj = record.load({
-                            type: "vendor",
-                            id: context.NetSuite_id
-                        });
-                        var mappedObject = getAccountMappedField(context, account_vendor__mapping);
+            log.debug({ title: 'Received Context', details: context });
 
-                        saveVendor(updateVendorObj, mappedObject);
-                    } catch (error) {
-                        log.error("error during vendor update", error);
-                        return {
-                            "success": "false",
-                            "error": {
-                                "message": error.message
-                            }
-                        }
-                    }
-                }
-                else {// Vendor create case
-                    try {
-                        var createVendorObj = record.create({
-                            type: "vendor"
-                        });
-                        var mappedObject = getAccountMappedField(context, account_vendor__mapping);
-                        saveVendor(createVendorObj, mappedObject);
-                    } catch (error) {
-                        log.error("error during vendor create", error);
-                        return {
-                            "success": "false",
-                            "error": {
-                                "message": error.message
-                            }
-                        }
-                    }
-                }
+            if (!context) {
+                return httpBadRequestObj;
             }
-        } catch (e) {
-            log.error("error", error);
+
+            const isUpdate = "NetSuite_id" in context;
+
+            if (validatePayload(context, isUpdate)) {
+                return httpBadRequestObj;
+            }
+
+            if (isUpdate) {
+                return updateVendor(context);
+            } else {
+                return createVendor(context);
+            }
+        } catch (error) {
+            log.error("Error in _post", error);
             return {
                 "success": "false",
                 "error": {
                     "message": error.message
                 }
-            }
+            };
         }
-
     }
-    function validatePayload(context) {
-        var validatePayload = false;
-        if ("NetSuite_id" in context) {
-            for (var key in vendor_update_payload) {
-                if (!(key in context)) {
-                    validatePayload = true;
-                }
-            }
-        }
-        else {
-            for (var key in vendor_create_payload) {
-                if (!(key in context)) {
-                    validatePayload = true;
-                }
-            }
-        }
-        return validatePayload;
-    }
-    function getAccountMappedField(vendor_create_payload, account_vendor__mapping) {
-        var mappedObject = {};
-        var addressArray = [];
 
-        // Create the mapped object and address array
-        for (var key in vendor_create_payload) {
-            if (vendor_create_payload.hasOwnProperty(key) && account_vendor__mapping.hasOwnProperty(key)) {
-                var newKey = account_vendor__mapping[key];
+    function validatePayload(context, isUpdate) {
+        const requiredKeys = isUpdate ? Object.keys(vendorUpdatePayload) : Object.keys(vendorCreatePayload);
+        for (const key of requiredKeys) {
+            if (!context[key]) {
+                log.error(`Missing Required Field: ${key}`, context);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function createVendor(context) {
+        try {
+            const createVendorObj = record.create({ type: "vendor" });
+            const mappedObject = mapFields(context, accountVendorMapping);
+            return saveVendor(createVendorObj, mappedObject);
+        } catch (error) {
+            log.error("Error during vendor creation", error);
+            return {
+                "success": "false",
+                "error": {
+                    "message": error.message
+                }
+            };
+        }
+    }
+
+    function updateVendor(context) {
+        try {
+            const updateVendorObj = record.load({
+                type: "vendor",
+                id: context.NetSuite_id
+            });
+            const mappedObject = mapFields(context, accountVendorMapping);
+            return saveVendor(updateVendorObj, mappedObject);
+        } catch (error) {
+            log.error("Error during vendor update", error);
+            return {
+                "success": "false",
+                "error": {
+                    "message": error.message
+                }
+            };
+        }
+    }
+
+    function mapFields(payload, mapping) {
+        const mappedObject = {};
+        const addressObject = {};
+
+        for (const key in payload) {
+            if (mapping[key]) {
+                const mappedKey = mapping[key];
                 if (["ShippingCountry", "ShippingStreet", "ShippingCity", "ShippingState", "ShippingPostalCode", "Phone"].includes(key)) {
-                    addressArray.push({ [newKey]: vendor_create_payload[key] });
+                    addressObject[mappedKey] = payload[key];
                 } else {
-                    mappedObject[newKey] = vendor_create_payload[key];
+                    mappedObject[mappedKey] = payload[key];
                 }
             }
         }
-
-        // Combine address fields into a single object and push to addressArray
-        var addressObject = {};
-        addressArray.forEach(function (item) {
-            var key = Object.keys(item)[0];
-            addressObject[key] = item[key];
-        });
         mappedObject.addressArray = [addressObject];
-        log.debug("mappedObject", mappedObject);
         return mappedObject;
     }
+
     function saveVendor(vendorObj, mappedObject) {
         try {
-
-
-            for (var prop in mappedObject) {
-                if (Array.isArray(mappedObject[prop])) {
-                    break
-                } else {
-                    vendorObj.setValue({ fieldId: prop, value: mappedObject[prop] });
-                }
+            for (const key in mappedObject) {
+                if (key === "addressArray") continue;
+                vendorObj.setValue({ fieldId: key, value: mappedObject[key] });
             }
-            var linecount = vendorObj.getLineCount({
-                sublistId: "addressbook",
-            });
-            log.debug('Address linecount :', linecount)
-            if (linecount > 0) {
-                for (var index = linecount - 1; index >= 0; index--) {
-                    vendorObj.removeLine({
-                        sublistId: "addressbook",
-                        line: index,
-                    });
 
-                }
-            }
-            for (var i = 0; i < mappedObject.addressArray.length; i++) {
-                var addressObj = mappedObject.addressArray[i];
-                vendorObj.selectNewLine({ sublistId: 'addressbook' })
-                //log.debug('---SELECT LINE----')
+            clearAddressBook(vendorObj);
+            addAddresses(vendorObj, mappedObject.addressArray);
 
-                var myAddressSubRecord = vendorObj.getCurrentSublistSubrecord({ sublistId: 'addressbook', fieldId: 'addressbookaddress' });
-                //log.debug('myAddressSubRecord :', myAddressSubRecord)
-
-                if (addressObj.hasOwnProperty("ShippingAddress")) {
-                    vendorObj.setCurrentSublistValue({ sublistId: 'addressbook', fieldId: 'defaultbilling', value: false });
-                    vendorObj.setCurrentSublistValue({ sublistId: 'addressbook', fieldId: 'defaultshipping', value: true });
-
-                    var shippingAddress = addressObj.ShippingAddress;
-                    //log.debug('shippingAddress :', shippingAddress)
-                    for (var ship_add in shippingAddress) {
-                        if (!is_empty(shippingAddress[ship_add])) {
-                            // log.debug('----')
-                            // log.debug('ship_add :',ship_add)
-                            log.debug('shippingAddress[ship_add]:', shippingAddress[ship_add])
-                            myAddressSubRecord.setValue({
-                                fieldId: ship_add, value: shippingAddress[ship_add], ignoreFieldChange: true
-                            })
-                        }
-                    }
-
-                }
-                vendorObj.commitLine({ sublistId: 'addressbook' });
-            }
-            log.debug('--GOING TO SAVE---')
-            var vendorId = vendorObj.save({
-                enableSourcing: true,
-                ignoreMandatoryFields: true
-            });
-            log.audit('vendorId :', vendorId);
+            const vendorId = vendorObj.save({ enableSourcing: true, ignoreMandatoryFields: true });
+            return { "success": "true", "vendorId": vendorId };
         } catch (error) {
-            log.error("error during vendor data process", error);
+            log.error("Error during vendor save", error);
             return {
                 "success": "false",
                 "error": {
                     "message": error.message
                 }
-            }
+            };
         }
     }
+
+    function clearAddressBook(vendorObj) {
+        const lineCount = vendorObj.getLineCount({ sublistId: "addressbook" });
+        for (let i = lineCount - 1; i >= 0; i--) {
+            vendorObj.removeLine({ sublistId: "addressbook", line: i });
+        }
+    }
+
+    function addAddresses(vendorObj, addressArray) {
+        for (const address of addressArray) {
+            vendorObj.selectNewLine({ sublistId: "addressbook" });
+            const addressSubrecord = vendorObj.getCurrentSublistSubrecord({ sublistId: 'addressbook', fieldId: 'addressbookaddress' });
+            for (const field in address) {
+                if (address[field]) {
+                    addressSubrecord.setValue({ fieldId: field, value: address[field], ignoreFieldChange: true });
+                }
+            }
+            vendorObj.commitLine({ sublistId: 'addressbook' });
+        }
+    }
+
     function _get(context) {
         return httpMethodValidationObj;
     }
+
     function _put(context) {
         return httpMethodValidationObj;
     }
@@ -257,5 +221,5 @@ define(["N/record"], function (record) {
         post: _post,
         put: _put,
         delete: _delete
-    }
+    };
 });
