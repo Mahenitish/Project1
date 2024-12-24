@@ -1,0 +1,20 @@
+[
+  {
+    "integration_1": {
+      "Name": "Integration 1",
+      "Success": "search_id_success_1",
+      "Failed": "search_id_failed_1",
+      "Source": "System A",
+      "Destination": "System B"
+    }
+  },
+  {
+    "integration_2": {
+      "Name": "Integration 2",
+      "Success": "search_id_success_2",
+      "Failed": "search_id_failed_2",
+      "Source": "System C",
+      "Destination": "System D"
+    }
+  }
+]
