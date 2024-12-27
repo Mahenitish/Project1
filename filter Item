@@ -1,0 +1,55 @@
+/**
+ * @NApiVersion 2.x
+ * @NScriptType ClientScript
+ */
+define(['N/currentRecord', 'N/search'], function(currentRecord, search) {
+    function fieldChanged(context) {
+        var record = context.currentRecord;
+        var fieldName = context.fieldId;
+
+        if (fieldName === 'custpage_custom_list_field') {
+            var selectedValue = record.getValue({ fieldId: 'custpage_custom_list_field' });
+
+            // Define the filter criteria based on the selected value
+            var itemFilter = [];
+            if (selectedValue === 'value_a') {
+                itemFilter = ['item_x']; // Replace 'item_x' with the actual item ID
+            }
+
+            // Get the item field and apply the filter
+            var itemField = record.getField({ fieldId: 'item' });
+            itemField.removeSelectOption({ value: null }); // Clear existing options
+
+            // Add filtered options
+            itemFilter.forEach(function(itemId) {
+                itemField.insertSelectOption({
+                    value: itemId,
+                    text: getItemName(itemId) // Function to get item name
+                });
+            });
+        }
+    }
+
+    function getItemName(itemId) {
+        // Perform a search to get the item name
+        var itemSearch = search.create({
+            type: search.Type.ITEM,
+            filters: [
+                ['internalid', 'is', itemId]
+            ],
+            columns: ['name']
+        });
+
+        var itemName = '';
+        itemSearch.run().each(function(result) {
+            itemName = result.getValue({ name: 'name' });
+            return false; // Exit after the first result
+        });
+
+        return itemName;
+    }
+
+    return {
+        fieldChanged: fieldChanged
+    };
+});
