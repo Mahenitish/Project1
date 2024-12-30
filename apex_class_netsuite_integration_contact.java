@@ -21,7 +21,7 @@ public class NetSuiteContactFlowIntegration {
 
                 // Prepare HTTP request
                 HttpRequest req = new HttpRequest();
-                req.setEndpoint('https://example.com/suitelet_endpoint'); // Replace with your Suitelet endpoint
+                req.setEndpoint('https://7377593-sb1.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=670&deploy=1&compid=7377593_SB1&ns-at=AAEJ7tMQuIFXTsDR-g90BsMdbg9qEJNm7roevBA1gvH35nDVCU8');
                 req.setMethod('GET'); // Adjust if POST is needed
                 req.setHeader('Content-Type', 'application/json');
 
