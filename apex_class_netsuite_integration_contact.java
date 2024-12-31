@@ -1,28 +1,56 @@
-public class NetSuiteContactFlowIntegration {
+public class NetSuiteUnifiedFlowIntegration {
 
     // Wrapper class for input parameters
     public class FlowInput {
         @InvocableVariable(required=true)
-        public Id contactId; // The ID of the Contact record
+        public Id recordId; // The ID of the record (Account, Contact, or Product)
+
+        @InvocableVariable(required=true)
+        public String objectType; // The object type: "Account", "Contact", or "Product"
     }
 
     // Invocable method for Flow
-    @InvocableMethod(label='Trigger NetSuite API for Contact' description='Triggers the NetSuite Suitelet API for the given Contact record.')
+    @InvocableMethod(label='Trigger NetSuite API for Account, Contact, or Product' description='Triggers the NetSuite Suitelet API for the given record.')
     public static void triggerNetSuiteAPI(List<FlowInput> inputs) {
         for (FlowInput input : inputs) {
-            if (input.contactId != null) {
+            if (input.recordId != null && input.objectType != null) {
                 // Call future method to perform the HTTP callout
-                triggerNetSuiteAsync(input.contactId);
+                sw(input.recordId, input.objectType);
             }
         }
     }
 
     // Future method to handle the callout asynchronously
     @future(callout=true)
-    public static void triggerNetSuiteAsync(Id contactId) {
+    public static void triggerNetSuiteAsync(Id recordId, String objectType) {
         try {
-            // Fetch Contact details
-            Contact contact = [SELECT FirstName, LastName, Email FROM Contact WHERE Id = :contactId LIMIT 1];
+            // Initialize variables for API parameters
+            String name = '';
+            String additionalParams = '';
+
+            // Fetch details based on the object type
+            if (objectType == 'Account') {
+                Account account = [SELECT Name, BillingStreet, BillingCity, BillingState, BillingPostalCode, BillingCountry FROM Account WHERE Id = :recordId LIMIT 1];
+                name = account.Name;
+                additionalParams = '&billingStreet=' + account.BillingStreet + 
+                                   '&billingCity=' + account.BillingCity + 
+                                   '&billingState=' + account.BillingState + 
+                                   '&billingPostalCode=' + account.BillingPostalCode + 
+                                   '&billingCountry=' + account.BillingCountry;
+            } else if (objectType == 'Contact') {
+                Contact contact = [SELECT FirstName, LastName, Email FROM Contact WHERE Id = :recordId LIMIT 1];
+                name = contact.FirstName + ' ' + contact.LastName;
+                additionalParams = '&email=' + contact.Email;
+            } else if (objectType == 'Product') {
+                Product2 product = [SELECT Name, ProductCode, Description, Family, IsActive FROM Product2 WHERE Id = :recordId LIMIT 1];
+                name = product.Name;
+                additionalParams = '&productCode=' + product.ProductCode + 
+                                   '&description=' + product.Description + 
+                                   '&family=' + product.Family + 
+                                   '&isActive=' + product.IsActive;
+            } else {
+                throw new IllegalArgumentException('Unsupported object type: ' + objectType);
+            }
 
             // Prepare HTTP request
             HttpRequest req = new HttpRequest();
@@ -31,7 +59,7 @@ public class NetSuiteContactFlowIntegration {
             req.setHeader('Content-Type', 'application/json');
 
             // Add parameters to the endpoint URL
-            String params = '?contactId=' + contactId + '&firstName=' + contact.FirstName + '&lastName=' + contact.LastName + '&email=' + contact.Email;
+            String params = '?recordId=' + recordId + '&objectType=' + objectType + '&name=' + name + additionalParams;
             req.setEndpoint(req.getEndpoint() + params);
 
             // Send HTTP request
@@ -45,7 +73,7 @@ public class NetSuiteContactFlowIntegration {
                 System.debug('NetSuite API call failed: ' + res.getStatusCode() + ' - ' + res.getBody());
             }
         } catch (Exception e) {
-            System.debug('Error in NetSuite API call for Contact: ' + e.getMessage());
+            System.debug('Error in NetSuite API call: ' + e.getMessage());
         }
     }
 }
